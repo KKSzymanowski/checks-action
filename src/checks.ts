@@ -1,53 +1,32 @@
 import {GitHub} from '@actions/github/lib/utils';
-import * as core from '@actions/core';
 import * as Inputs from './namespaces/Inputs';
+import {Conclusion, Status} from './namespaces/Inputs';
+import {Context} from '@actions/github/lib/context';
 
-type Ownership = {
-  owner: string;
-  repo: string;
-};
+const unpackInputs = (inputs: Inputs.Args): Record<string, unknown> => {
+  const minimum = +inputs.minimumCoverage;
+  const current = +inputs.currentCoverage;
 
-const unpackInputs = (title: string, inputs: Inputs.Args): Record<string, unknown> => {
-  let output;
-  if (inputs.output) {
-    output = {
-      title,
-      summary: inputs.output.summary,
-      text: inputs.output.text_description,
-      actions: inputs.actions,
-      annotations: inputs.annotations,
-      images: inputs.images,
-    };
+  let conclusion;
+  let message;
+  if (current < minimum) {
+    conclusion = Conclusion.Failure;
+    message = `Coverage too low. Got: ${current}%. Minimum: ${minimum}%.`;
+  } else {
+    conclusion = Conclusion.Success;
+    message = `Coverage OK: ${current}%. Minimum ${minimum}%.`;
   }
 
-  let details_url;
-
-  if (inputs.conclusion === Inputs.Conclusion.ActionRequired || inputs.actions) {
-    if (inputs.detailsURL) {
-      const reasonList = [];
-      if (inputs.conclusion === Inputs.Conclusion.ActionRequired) {
-        reasonList.push(`'conclusion' is 'action_required'`);
-      }
-      if (inputs.actions) {
-        reasonList.push(`'actions' was provided`);
-      }
-      const reasons = reasonList.join(' and ');
-      core.info(
-        `'details_url' was ignored in favor of 'action_url' because ${reasons} (see documentation for details)`,
-      );
-    }
-    details_url = inputs.actionURL;
-  } else if (inputs.detailsURL) {
-    details_url = inputs.detailsURL;
-  }
+  const output = {
+    title: message,
+    summary: message,
+  };
 
   return {
-    status: inputs.status.toString(),
+    status: Status.Completed.toString(),
     output,
-    actions: inputs.actions,
-    conclusion: inputs.conclusion ? inputs.conclusion.toString() : undefined,
-    completed_at: inputs.status === Inputs.Status.Completed ? formatDate() : undefined,
-    details_url,
+    conclusion: conclusion.toString(),
+    completed_at: formatDate(),
   };
 };
 
@@ -57,34 +36,17 @@ const formatDate = (): string => {
 
 export const createRun = async (
   octokit: InstanceType<typeof GitHub>,
-  name: string,
+  context: Context,
   sha: string,
-  ownership: Ownership,
   inputs: Inputs.Args,
 ): Promise<number> => {
   const {data} = await octokit.rest.checks.create({
-    ...ownership,
+    owner: context.repo.owner,
+    repo: context.repo.repo,
     head_sha: sha,
-    name: name,
+    name: 'Coverage - ' + context.eventName,
     started_at: formatDate(),
-    ...unpackInputs(name, inputs),
+    ...unpackInputs(inputs),
   });
   return data.id;
-};
-
-export const updateRun = async (
-  octokit: InstanceType<typeof GitHub>,
-  id: number,
-  ownership: Ownership,
-  inputs: Inputs.Args,
-): Promise<void> => {
-  const previous = await octokit.rest.checks.get({
-    ...ownership,
-    check_run_id: id,
-  });
-  await octokit.rest.checks.update({
-    ...ownership,
-    check_run_id: id,
-    ...unpackInputs(previous.data.name, inputs),
-  });
 };

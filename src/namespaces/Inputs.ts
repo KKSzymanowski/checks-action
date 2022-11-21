@@ -1,35 +1,10 @@
-import {Actions, Annotations, Images} from './GitHub';
-
-interface ArgsBase {
-  repo?: string;
+export interface Args {
   sha?: string;
   token: string;
-  conclusion?: Conclusion;
-  status: Status;
 
-  actionURL?: string;
-  detailsURL?: string;
-
-  output?: Output;
-  annotations?: Annotations;
-  images?: Images;
-  actions?: Actions;
+  minimumCoverage: string;
+  currentCoverage: string;
 }
-
-export interface ArgsCreate extends ArgsBase {
-  name: string;
-}
-
-export interface ArgsUpdate extends ArgsBase {
-  checkID: number;
-}
-
-export type Args = ArgsCreate | ArgsUpdate;
-
-export type Output = {
-  summary: string;
-  text_description?: string;
-};
 
 export enum Conclusion {
   Success = 'success',
